@@ -7,6 +7,46 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
 {
     public abstract class InheritanceFixtureBase
     {
+        private DbContextOptions _options;
+
+        public abstract DbContextOptions BuildOptions();
+
+        public InheritanceContext CreateContext(bool enableFilters = false)
+        {
+            EnableFilters = enableFilters;
+
+            if (!IsSeeded)
+            {
+                using (var context = CreateContextCore())
+                {
+                    InitializeStore(context);
+                    SeedData(context);
+                }
+
+                ClearLog();
+
+                IsSeeded = true;
+            }
+
+            return CreateContextCore();
+        }
+
+        protected virtual void ClearLog()
+        {
+        }
+
+        protected virtual void InitializeStore(DbContext context)
+        {
+        }
+
+        private bool IsSeeded { get; set; }
+        private bool EnableFilters { get; set; }
+
+        private InheritanceContext CreateContextCore()
+        {
+            return new InheritanceContext(_options ?? (_options = BuildOptions()));
+        }
+
         public virtual void OnModelCreating(ModelBuilder modelBuilder)
         {
             modelBuilder.Entity<Kiwi>();
@@ -22,9 +62,12 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
             modelBuilder.Entity<Tea>();
             modelBuilder.Entity<Lilt>();
             modelBuilder.Entity<Coke>();
-        }
 
-        public abstract InheritanceContext CreateContext();
+            if (EnableFilters)
+            {
+                modelBuilder.Entity<Animal>().HasFilter(a => a.CountryId == 1);
+            }
+        }
 
         protected void SeedData(InheritanceContext context)
         {

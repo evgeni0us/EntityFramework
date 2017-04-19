@@ -3,7 +3,6 @@
 
 using System;
 using Microsoft.EntityFrameworkCore.Specification.Tests;
-using Microsoft.EntityFrameworkCore.Specification.Tests.TestModels.Inheritance;
 using Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests.Utilities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -12,35 +11,35 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
 {
     public class InheritanceSqlServerFixture : InheritanceRelationalFixture, IDisposable
     {
-        private readonly DbContextOptions _options;
-        private readonly SqlServerTestStore _testStore;
+        private readonly SqlServerTestStore _testStore = SqlServerTestStore.Create("InheritanceSqlServerTest");
 
         public TestSqlLoggerFactory TestSqlLoggerFactory { get; } = new TestSqlLoggerFactory();
 
-        public InheritanceSqlServerFixture()
+        protected override void InitializeStore(DbContext context)
         {
-            var serviceProvider = new ServiceCollection()
-                .AddEntityFrameworkSqlServer()
-                .AddSingleton(TestModelSource.GetFactory(OnModelCreating))
-                .AddSingleton<ILoggerFactory>(TestSqlLoggerFactory)
-                .BuildServiceProvider();
-
-            _testStore = SqlServerTestStore.Create("InheritanceSqlServerTest");
-
-            _options = new DbContextOptionsBuilder()
-                .EnableSensitiveDataLogging()
-                .UseSqlServer(_testStore.Connection, b => b.ApplyConfiguration())
-                .UseInternalServiceProvider(serviceProvider)
-                .Options;
-
-            using (var context = CreateContext())
-            {
-                context.Database.EnsureCreated();
-                SeedData(context);
-            }
+            context.Database.EnsureCreated();
         }
 
-        public override InheritanceContext CreateContext() => new InheritanceContext(_options);
+        protected override void ClearLog()
+        {
+            TestSqlLoggerFactory.Clear();
+        }
+
+        public override DbContextOptions BuildOptions()
+        {
+            return
+                new DbContextOptionsBuilder()
+                    .EnableSensitiveDataLogging()
+                    .UseSqlServer(_testStore.Connection, b => b.ApplyConfiguration())
+                    .UseInternalServiceProvider(
+                        new ServiceCollection()
+                            .AddEntityFrameworkSqlServer()
+                            .AddSingleton(TestModelSource.GetFactory(OnModelCreating))
+                            .AddSingleton<ILoggerFactory>(TestSqlLoggerFactory)
+                            .BuildServiceProvider())
+                    .Options;
+        }
+
         public void Dispose() => _testStore.Dispose();
     }
 }

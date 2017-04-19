@@ -41,6 +41,25 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
             EnsureChangeTrackingStrategy(model);
             ValidateDelegatedIdentityNavigations(model);
             EnsureFieldMapping(model);
+            EnsureNoFiltersOnDerivedTypes(model);
+        }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        protected virtual void EnsureNoFiltersOnDerivedTypes([NotNull] IModel model)
+        {
+            Check.NotNull(model, nameof(model));
+
+            var invalidEntityType
+                = model.GetEntityTypes()
+                    .FirstOrDefault(t => t.BaseType != null && t.Filter != null);
+
+            if (invalidEntityType != null)
+            {
+                ShowError(CoreStrings.BadFilterDerivedType(invalidEntityType.Filter, invalidEntityType.DisplayName()));
+            }
         }
 
         /// <summary>
@@ -49,6 +68,8 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         /// </summary>
         protected virtual void EnsureNoShadowEntities([NotNull] IModel model)
         {
+            Check.NotNull(model, nameof(model));
+
             var firstShadowEntity = model.GetEntityTypes().FirstOrDefault(entityType => !entityType.HasClrType());
             if (firstShadowEntity != null)
             {
@@ -62,6 +83,8 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         /// </summary>
         protected virtual void EnsureNoShadowKeys([NotNull] IModel model)
         {
+            Check.NotNull(model, nameof(model));
+
             foreach (var entityType in model.GetEntityTypes().Where(t => t.ClrType != null))
             {
                 foreach (var key in entityType.GetDeclaredKeys())
@@ -119,6 +142,8 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         /// </summary>
         protected virtual void EnsureClrInheritance([NotNull] IModel model)
         {
+            Check.NotNull(model, nameof(model));
+
             var validEntityTypes = new HashSet<IEntityType>();
             foreach (var entityType in model.GetEntityTypes())
             {
@@ -130,8 +155,13 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        protected virtual void EnsureClrInheritance([NotNull] IModel model, [NotNull] IEntityType entityType, [NotNull] HashSet<IEntityType> validEntityTypes)
+        protected virtual void EnsureClrInheritance(
+            [NotNull] IModel model, [NotNull] IEntityType entityType, [NotNull] HashSet<IEntityType> validEntityTypes)
         {
+            Check.NotNull(model, nameof(model));
+            Check.NotNull(entityType, nameof(entityType));
+            Check.NotNull(validEntityTypes, nameof(validEntityTypes));
+
             if (validEntityTypes.Contains(entityType))
             {
                 return;
@@ -198,6 +228,8 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         /// </summary>
         protected virtual void ValidateDelegatedIdentityNavigations([NotNull] IModel model)
         {
+            Check.NotNull(model, nameof(model));
+
             foreach (var entityType in model.GetEntityTypes())
             {
                 if (entityType.DefiningEntityType != null)
@@ -236,6 +268,8 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         /// </summary>
         protected virtual void EnsureFieldMapping([NotNull] IModel model)
         {
+            Check.NotNull(model, nameof(model));
+
             foreach (var entityType in model.GetEntityTypes())
             {
                 foreach (var propertyBase in entityType

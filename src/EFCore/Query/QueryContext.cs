@@ -18,7 +18,7 @@ namespace Microsoft.EntityFrameworkCore.Query
     /// <summary>
     ///     The principal data structure used by a compiled query during execution.
     /// </summary>
-    public class QueryContext : IDisposable
+    public class QueryContext : IDisposable, IParameterValues
     {
         private readonly Func<IQueryBuffer> _queryBufferFactory;
 
@@ -40,6 +40,11 @@ namespace Microsoft.EntityFrameworkCore.Query
             _queryBufferFactory = queryBufferFactory;
             Dependencies = dependencies;
         }
+
+        /// <summary>
+        ///     Gets the current DbContext.
+        /// </summary>
+        public virtual DbContext Context => Dependencies.CurrentDbContext.Context;
 
         /// <summary>
         ///     Parameter object containing dependencies for this service.
@@ -95,7 +100,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         /// </summary>
         /// <param name="name"> The name. </param>
         /// <param name="value"> The value. </param>
-        public virtual void AddParameter([NotNull] string name, [CanBeNull] object value)
+        public virtual void AddParameter(string name, object value)
         {
             Check.NotEmpty(name, nameof(name));
 
@@ -109,7 +114,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         /// <returns>
         ///     The parameter value.
         /// </returns>
-        public virtual object RemoveParameter([NotNull] string name)
+        public virtual object RemoveParameter(string name)
         {
             Check.NotEmpty(name, nameof(name));
 

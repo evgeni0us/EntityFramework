@@ -91,7 +91,10 @@ namespace Microsoft.EntityFrameworkCore.Query
         private readonly IResultOperatorHandler _resultOperatorHandler;
         private readonly IEntityMaterializerSource _entityMaterializerSource;
         private readonly IExpressionPrinter _expressionPrinter;
+
         private readonly QueryCompilationContext _queryCompilationContext;
+
+        private readonly FilterApplyingExpressionVisitor _filterApplyingExpressionVisitor;
 
         private Expression _expression;
         private ParameterExpression _currentParameter;
@@ -129,6 +132,8 @@ namespace Microsoft.EntityFrameworkCore.Query
             _queryCompilationContext = queryCompilationContext;
 
             LinqOperatorProvider = queryCompilationContext.LinqOperatorProvider;
+
+            _filterApplyingExpressionVisitor = new FilterApplyingExpressionVisitor(_queryCompilationContext);
         }
 
         /// <summary>
@@ -202,7 +207,7 @@ namespace Microsoft.EntityFrameworkCore.Query
                 SingleResultToSequence(queryModel);
 
                 TrackEntitiesInResults<TResult>(queryModel);
-
+                
                 InterceptExceptions();
 
                 return CreateExecutorLambda<IEnumerable<TResult>>();
@@ -241,7 +246,7 @@ namespace Microsoft.EntityFrameworkCore.Query
                 SingleResultToSequence(queryModel, _expression.Type.GetTypeInfo().GenericTypeArguments[0]);
 
                 TrackEntitiesInResults<TResult>(queryModel);
-
+                
                 InterceptExceptions();
 
                 return CreateExecutorLambda<IAsyncEnumerable<TResult>>();
@@ -309,6 +314,8 @@ namespace Microsoft.EntityFrameworkCore.Query
             includeCompiler.RewriteCollectionQueries(queryModel);
 
             includeCompiler.LogIgnoredIncludes();
+
+            queryModel.TransformExpressions(_filterApplyingExpressionVisitor.Visit);
 
             // Second pass of optimizations
 
@@ -536,10 +543,24 @@ namespace Microsoft.EntityFrameworkCore.Query
         /// >
         protected virtual Func<QueryContext, TResults> CreateExecutorLambda<TResults>()
         {
+            var expression = _expression;
+
+            var setFilterParameterExpressions 
+                = CreateSetFilterParametersExpressions(out var contextVariableExpression);
+
+            if (setFilterParameterExpressions != null)
+            {
+                expression
+                    = Expression.Block(
+                        new [] { contextVariableExpression },
+                        setFilterParameterExpressions.Concat(new[] { expression }));
+            }
+
             var queryExecutorExpression
                 = Expression
                     .Lambda<Func<QueryContext, TResults>>(
-                        _expression, QueryContextParameter);
+                        expression, 
+                        QueryContextParameter);
 
             try
             {
@@ -556,6 +577,57 @@ namespace Microsoft.EntityFrameworkCore.Query
                             return queryPlan;
                         });
             }
+        }
+
+        private static readonly MethodInfo _queryContextAddParameterMethodInfo
+            = typeof(QueryContext)
+                .GetTypeInfo()
+                .GetDeclaredMethod(nameof(QueryContext.AddParameter));
+
+        private static readonly PropertyInfo _queryContextContextPropertyInfo
+            = typeof(QueryContext)
+                .GetTypeInfo()
+                .GetDeclaredProperty(nameof(QueryContext.Context));
+
+        private IEnumerable<Expression> CreateSetFilterParametersExpressions(
+            out ParameterExpression contextVariableExpression)
+        {
+            contextVariableExpression = null;
+
+            if (_filterApplyingExpressionVisitor.ContextParameters.Count == 0)
+            {
+                return null;
+            }
+
+            contextVariableExpression
+                = Expression.Variable(_queryCompilationContext.ContextType, "context");
+
+            var blockExpressions
+                = new List<Expression>
+                {
+                    Expression.Assign(
+                        contextVariableExpression,
+                        Expression.Convert(
+                            Expression.Property(
+                                QueryContextParameter,
+                                _queryContextContextPropertyInfo),
+                            _queryCompilationContext.ContextType))
+                };
+
+            // ReSharper disable once LoopCanBeConvertedToQuery
+            foreach (var keyValuePair in _filterApplyingExpressionVisitor.ContextParameters)
+            {
+                blockExpressions.Add(
+                    Expression.Call(
+                        QueryContextParameter,
+                        _queryContextAddParameterMethodInfo,
+                        Expression.Constant(keyValuePair.Key),
+                        Expression.Invoke(
+                            (LambdaExpression)keyValuePair.Value,
+                            contextVariableExpression)));
+            }
+
+            return blockExpressions;
         }
 
         /// <summary>
