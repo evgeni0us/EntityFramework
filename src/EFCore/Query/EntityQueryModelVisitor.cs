@@ -68,16 +68,103 @@ namespace Microsoft.EntityFrameworkCore.Query
         /// <summary>
         ///     Creates an expression to access the given property on an given entity.
         /// </summary>
+        /// <remarks>
+        ///     This method compensates for potential type differences between target expression and propery declaring type.
+        /// </remarks>
         /// <param name="target"> The entity. </param>
         /// <param name="property"> The property to be accessed. </param>
+        /// <param name="makeNullable"> The property indicating whether property should be made nullable automatically. </param>
         /// <returns> The newly created expression. </returns>
         public static Expression CreatePropertyExpression(
             [NotNull] Expression target,
-            [NotNull] IPropertyBase property)
-            => Expression.Call(
-                EF.PropertyMethod.MakeGenericMethod(property.ClrType.MakeNullable()),
+            [NotNull] IPropertyBase property,
+            bool makeNullable = true)
+            => CreatePropertyExpression(target, property.DeclaringType.ClrType, property.ClrType, property.Name, makeNullable);
+
+        /// <summary>
+        ///     Creates an expression to access the given property on an given entity.
+        /// </summary>
+        /// <remarks>
+        ///     This method compensates for potential type differences between target expression and propery declaring type.
+        /// </remarks>
+        /// <param name="target"> The entity. </param>
+        /// <param name="propertyInfo"> The <see cref="PropertyInfo" /> of the property to be accessed. </param>
+        /// <returns> The newly created expression. </returns>
+        public static Expression CreatePropertyExpression(
+            [NotNull] Expression target,
+            [NotNull] PropertyInfo propertyInfo)
+            => CreatePropertyExpression(target, propertyInfo.DeclaringType, propertyInfo.PropertyType, propertyInfo.Name, makeNullable: false);
+
+        private static Expression CreatePropertyExpression(
+            Expression target,
+            Type propertyDeclaringType,
+            Type propertyType,
+            string propertyName,
+            bool makeNullable)
+        {
+            if (propertyDeclaringType != target.Type
+                && target.Type.GetTypeInfo().IsAssignableFrom(propertyDeclaringType.GetTypeInfo()))
+            {
+                target = Expression.Convert(target, propertyDeclaringType);
+            }
+
+            if (makeNullable)
+            {
+                propertyType = propertyType.MakeNullable();
+            }
+
+            return Expression.Call(
+                EF.PropertyMethod.MakeGenericMethod(propertyType),
                 target,
-                Expression.Constant(property.Name));
+                Expression.Constant(propertyName));
+        }
+
+        /// <summary>
+        ///     Creates an expression that represents assignment operation.
+        /// </summary>
+        /// <remarks>
+        ///     This method compensates for potential type differences between target expression and propery declaring type.
+        /// </remarks>
+        /// <param name="left"> Expression that will be assigned to. </param>
+        /// <param name="right"> Expression being assigned. </param>
+        /// <returns></returns>
+        public static BinaryExpression CreateAssignExpression(
+            [NotNull] Expression left, 
+            [NotNull] Expression right)
+        {
+            var leftType = left.Type;
+            if (leftType != right.Type
+                && right.Type.GetTypeInfo().IsAssignableFrom(leftType.GetTypeInfo()))
+            {
+                right = Expression.Convert(right, leftType);
+            }
+
+            return Expression.Assign(left, right);
+        }
+
+        /// <summary>
+        ///     Creates an expression to access the given member on an given expression.
+        /// </summary>
+        /// <remarks>
+        ///     This method compensates for potential type differences between target expression and member declaring type.
+        /// </remarks>
+        /// <param name="expression"> Caller expression. Can be null for static members.</param>
+        /// <param name="member"><see cref="MemberInfo" /> of the member to be accessed. </param>
+        /// <returns></returns>
+        public static MemberExpression MakeMemberAccess(
+            [CanBeNull] Expression expression,
+            [NotNull] MemberInfo member)
+        {
+            var memberDeclaringClrType = member.DeclaringType;
+            if (expression != null 
+                && memberDeclaringClrType != expression.Type
+                && expression.Type.GetTypeInfo().IsAssignableFrom(memberDeclaringClrType.GetTypeInfo()))
+            {
+                expression = Expression.Convert(expression, memberDeclaringClrType);
+            }
+
+            return Expression.MakeMemberAccess(expression, member);
+        }
 
         private readonly IQueryOptimizer _queryOptimizer;
         private readonly INavigationRewritingExpressionVisitorFactory _navigationRewritingExpressionVisitorFactory;

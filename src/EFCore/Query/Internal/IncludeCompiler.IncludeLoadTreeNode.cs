@@ -97,7 +97,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                     = new MainFromClause(
                         targetType.Name.Substring(0, 1).ToLowerInvariant(),
                         targetType,
-                        Expression.Property(targetExpression, Navigation.PropertyInfo));
+                        EntityQueryModelVisitor.CreatePropertyExpression(targetExpression, Navigation.PropertyInfo));
 
                 queryCompilationContext.AddQuerySourceRequiringMaterialization(mainFromClause);
 
@@ -234,8 +234,8 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                 else
                 {
                     blockExpressions.Add(
-                        Expression.Assign(
-                            Expression.MakeMemberAccess(
+                        EntityQueryModelVisitor.CreateAssignExpression(
+                            EntityQueryModelVisitor.MakeMemberAccess(
                                 targetEntityExpression,
                                 Navigation.GetMemberInfo(false, true)),
                             relatedEntityExpression));
@@ -268,8 +268,8 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                                     _collectionAccessorAddMethodInfo,
                                     relatedArrayAccessExpression,
                                     targetEntityExpression)
-                                : Expression.Assign(
-                                    Expression.MakeMemberAccess(
+                                : EntityQueryModelVisitor.CreateAssignExpression(
+                                    EntityQueryModelVisitor.MakeMemberAccess(
                                         relatedEntityExpression,
                                         inverseNavigation
                                             .GetMemberInfo(forConstruction: false, forSet: true)),

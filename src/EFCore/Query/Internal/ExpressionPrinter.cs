@@ -256,6 +256,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                 case ExpressionType.Convert:
                 case ExpressionType.Throw:
                 case ExpressionType.Not:
+                case ExpressionType.TypeAs:
                     VisitUnary((UnaryExpression)expression);
                     break;
 
@@ -269,6 +270,10 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
 
                 case ExpressionType.Index:
                     VisitIndex((IndexExpression)expression);
+                    break;
+
+                case ExpressionType.TypeIs:
+                    VisitTypeBinary((TypeBinaryExpression)expression);
                     break;
 
                 case ExpressionType.Extension:
@@ -643,8 +648,16 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             switch (unaryExpression.NodeType)
             {
                 case ExpressionType.Convert:
-                    _stringBuilder.Append("(" + unaryExpression.Type.ShortDisplayName() + ") ");
+                    if (unaryExpression.Operand is MemberExpression)
+                    {
+                        _stringBuilder.Append("(");
+                    }
+                    _stringBuilder.Append("(" + unaryExpression.Type.ShortDisplayName() + ")");
                     Visit(unaryExpression.Operand);
+                    if (unaryExpression.Operand is MemberExpression)
+                    {
+                        _stringBuilder.Append(")");
+                    }
                     break;
 
                 case ExpressionType.Throw:
@@ -656,6 +669,12 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                     _stringBuilder.Append("!(");
                     Visit(unaryExpression.Operand);
                     _stringBuilder.Append(")");
+                    break;
+
+                case ExpressionType.TypeAs:
+                    _stringBuilder.Append("(");
+                    Visit(unaryExpression.Operand);
+                    _stringBuilder.Append(" as " + unaryExpression.Type.ShortDisplayName() + ")");
                     break;
 
                 default:
@@ -707,6 +726,19 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             _stringBuilder.Append("]");
 
             return indexExpression;
+        }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        protected override Expression VisitTypeBinary(TypeBinaryExpression typeBinaryExpression)
+        {
+            _stringBuilder.Append("(");
+            Visit(typeBinaryExpression.Expression);
+            _stringBuilder.Append(" is " + typeBinaryExpression.TypeOperand.ShortDisplayName() + ")");
+
+            return typeBinaryExpression;
         }
 
         /// <summary>

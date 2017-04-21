@@ -261,6 +261,11 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                            ?? node;
                 }
 
+                if (newExpression.Type != node.Expression.Type)
+                {
+                    newExpression = Expression.Convert(newExpression, node.Expression.Type);
+                }
+
                 var member = node.Member;
                 var typeInfo = newExpression.Type.GetTypeInfo();
 
